@@ -1,62 +1,40 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import useGlobalReducer from "../hooks/useGlobalReducer.jsx";
-import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
-export const Home = () => {
+export const Register = () => {
     const { store, dispatch } = useGlobalReducer();
     const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
     const navigate = useNavigate();
+    const [password, setPassword] = useState("");
+  
 
-    useEffect(() => {
-        const loadMessage = async () => {
-            try {
-                const backendUrl = import.meta.env.VITE_BACKEND_URL;
-                if (!backendUrl) throw new Error("VITE_BACKEND_URL is not defined in .env file");
-
-                const response = await fetch(backendUrl + "/api/hello");
-                const data = await response.json();
-
-                if (response.ok) dispatch({ type: "set_hello", payload: data.message });
-                return data;
-            } catch (error) {
-                console.error("Fetch fallado, revisar si el puerto es publico");
-            }
-        };
-
-        loadMessage();
-    }, [dispatch]);
-
-    
-    const login = async () => {
+    const register = async () => {
         const backendUrl = import.meta.env.VITE_BACKEND_URL;
-        const resp = await fetch("https://didactic-waffle-jj7qr5gp56vrf5wvr-3001.app.github.dev/login", {
+        const resp = await fetch("https://didactic-waffle-jj7qr5gp56vrf5wvr-3001.app.github.dev/register", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ "email": email, "password":password })
+            body: JSON.stringify({ "email": email, "password": password })
         });
 
-        if (!resp.ok) throw Error("Usuario o Contraeña Incorrecta");
-
-        if (resp.status === 401) {
-            throw "Credenciales inválidas";
-        } else if (resp.status === 400) {
-            throw "Usuario o contraseña con formato inválido";
+        if (!resp.ok) {
+            const errorData = await resp.json();
+            throw errorData.msg || "Hubo un problema con el registro";
         }
 
         const data = await resp.json();
-        localStorage.setItem("jwt-token", data.token);
         return data;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await login();
-            alert("Login exitoso");
-            
-            navigate("/private")
+            const data = await register();
+            alert(data.msg || "Registro exitoso");
+            // Optionally clear the form
+            setEmail("");
+            setPassword("");
+            navigate("/")
         } catch (error) {
             alert(error);
         }
@@ -65,7 +43,7 @@ export const Home = () => {
     return (
         <div className="d-flex justify-content-center align-items-center vh-100">
             <div className="border p-4 rounded" style={{ width: "300px" }}>
-                <h3 className="text-center mb-4">Login</h3>
+                <h3 className="text-center mb-4">Register</h3>
                 <form onSubmit={handleSubmit}>
                     <div className="mb-3">
                         <label htmlFor="email" className="form-label">Email address</label>
@@ -91,15 +69,11 @@ export const Home = () => {
                             required
                         />
                     </div>
-                    <button type="submit" className="btn btn-primary w-100">
-                        Login
+                    <button type="submit" className="btn btn-success w-100">
+                        Register
                     </button>
-                     <Link to="/register" className="small">
-                            O crea una cuenta
-                        </Link>
                 </form>
             </div>
-            
         </div>
     );
 };

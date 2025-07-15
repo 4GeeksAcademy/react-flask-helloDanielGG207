@@ -6,10 +6,17 @@ from flask import Flask, request, jsonify, url_for, send_from_directory
 from flask_migrate import Migrate
 from flask_swagger import swagger
 from api.utils import APIException, generate_sitemap
-from api.models import db
+from api.models import db, User
 from api.routes import api
 from api.admin import setup_admin
 from api.commands import setup_commands
+from flask import Flask
+from flask_bcrypt import Bcrypt
+from flask_cors import CORS
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
 
 # from models import Person
 
@@ -17,8 +24,11 @@ ENV = "development" if os.getenv("FLASK_DEBUG") == "1" else "production"
 static_file_dir = os.path.join(os.path.dirname(
     os.path.realpath(__file__)), '../dist/')
 app = Flask(__name__)
+CORS(app)
 app.url_map.strict_slashes = False
-
+app.config["JWT_SECRET_KEY"] = os.getenv("JWT_KEY")  # JWT KEY = DanielGG207
+jwt = JWTManager(app)
+bcrypt = Bcrypt(app)
 # database condiguration
 db_url = os.getenv("DATABASE_URL")
 if db_url is not None:
@@ -64,6 +74,60 @@ def serve_any_other_file(path):
     response = send_from_directory(static_file_dir, path)
     response.cache_control.max_age = 0  # avoid cache memory
     return response
+
+@app.route("/register", methods = ["POST"])
+def register():
+   body = request.get_json(silent = True)
+   if body is None:
+      return jsonify({"msg": "Se nececita body"})
+   if "email" not in body:
+      return jsonify({"msg": "Se nececita el campo email"})
+   if "password" not in body:
+      return jsonify({"msg": "Se nececita el campo password"})
+   
+   new_user = User()
+   new_user.email = body["email"]
+   new_user.password = bcrypt.generate_password_hash(body["password"]).decode("utf-8")
+   new_user.is_active = True
+   db.session.add(new_user)
+   db.session.commit()
+   return jsonify({"msg": "usuario creado correctamente"})
+
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    body = request.get_json(silent=True)
+    if body is None:
+        return jsonify({"msg": "Debes enviar información en el body"}), 400
+    if "email" not in body:
+        return jsonify({"msg": "Debes enviar el email en el body"}), 400
+    if "password" not in body:
+        return jsonify({"msg": "Debes enviar el password en el body"}), 400
+
+    user = User.query.filter_by(email=body["email"]).first()
+    if user is None:
+        return jsonify({"msg": "Usuario no encontrado"}), 401
+
+    try:
+        password_valid = bcrypt.check_password_hash(user.password, body["password"])
+    except ValueError:
+        return jsonify({"msg": "Error al verificar la contraseña"}), 401
+
+    if not password_valid:
+        return jsonify({"msg": "Contraseña incorrecta"}), 401
+
+    token = create_access_token(identity=user.email)
+    return jsonify({"msg": "Estás logeado", "token": token})
+
+@app.route("/protected", methods=["GET"])
+@jwt_required()
+def protected():
+    # Access the identity of the current user with get_jwt_identity
+    current_user = get_jwt_identity()
+    return jsonify(logged_in_as=current_user), 200
+
+     
 
 
 # this only runs if `$ python src/main.py` is executed
